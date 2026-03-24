@@ -17,8 +17,22 @@ usermod -s /bin/bash display
 # Убираем пароль и разрешаем вход с пустым
 passwd -d display
 
-# 2. Установка пакетов
-apt update -qq || true
+# 2. Переключаем на немецкое зеркало и устанавливаем пакеты
+tee /etc/apt/sources.list.d/ubuntu.sources << 'EOF'
+Types: deb
+URIs: http://de.archive.ubuntu.com/ubuntu/
+Suites: noble noble-updates noble-backports
+Components: main restricted universe multiverse
+Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+
+Types: deb
+URIs: http://de.archive.ubuntu.com/ubuntu/
+Suites: noble-security
+Components: main restricted universe multiverse
+Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+EOF
+
+apt update -qq
 apt install -y tmux curl wget
 
 # 3. Установка genact
@@ -49,8 +63,6 @@ launch_session() {
         fi
     done
 
-    echo "Запущено $NUM_PANES панелей: ${selected[*]}"
-
     tmux send-keys -t $SESSION:0 "genact --modules ${selected[0]} --speed-factor $((RANDOM % 5 + 1))" Enter
 
     if [ $NUM_PANES -ge 2 ]; then
@@ -71,16 +83,22 @@ launch_session() {
     tmux select-layout -t $SESSION tiled
 }
 
+rotate_loop() {
+    while true; do
+        WAIT=$((RANDOM % 1201 + 600))
+        sleep $WAIT
+        launch_session
+    done
+}
+
 # Первый запуск
 launch_session
 
-# Цикл ротации: каждые 10-30 минут перезапускаем с новыми модулями
-while true; do
-    WAIT=$((RANDOM % 1201 + 600))
-    echo "Следующая смена модулей через $((WAIT / 60)) минут"
-    sleep $WAIT
-    launch_session
-done
+# Ротация в фоне
+rotate_loop &
+
+# Присоединяемся к сессии
+exec tmux attach-session -t $SESSION
 INNER
 chmod +x /usr/local/bin/start-activity-sim.sh
 
