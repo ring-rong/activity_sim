@@ -18,16 +18,40 @@ usermod -s /bin/bash display
 passwd -d display
 
 # 2. Переключаем на немецкое зеркало и устанавливаем пакеты
-tee /etc/apt/sources.list.d/ubuntu.sources << 'EOF'
+# Кодовое имя берём из /etc/os-release, а не хардкодим — иначе на
+# любом дистрибутиве, отличном от того, под который писался скрипт,
+# apt получит несовместимые пакетные версии и всё посыпется.
+if [ ! -r /etc/os-release ]; then
+    echo "Не найден /etc/os-release — не могу определить кодовое имя дистрибутива. Прерываю." >&2
+    exit 1
+fi
+
+. /etc/os-release
+CODENAME="${VERSION_CODENAME:-${UBUNTU_CODENAME:-}}"
+
+if [ -z "$CODENAME" ]; then
+    echo "Не удалось определить VERSION_CODENAME/UBUNTU_CODENAME из /etc/os-release. Прерываю." >&2
+    exit 1
+fi
+
+echo "Определён дистрибутив: ${PRETTY_NAME:-неизвестно} (codename: $CODENAME)"
+
+SOURCES_FILE="/etc/apt/sources.list.d/ubuntu.sources"
+if [ -f "$SOURCES_FILE" ]; then
+    cp -a "$SOURCES_FILE" "${SOURCES_FILE}.bak.$(date +%s)"
+    echo "Сделан бэкап текущего sources-файла"
+fi
+
+tee "$SOURCES_FILE" << EOF
 Types: deb
 URIs: http://de.archive.ubuntu.com/ubuntu/
-Suites: noble noble-updates noble-backports
+Suites: ${CODENAME} ${CODENAME}-updates ${CODENAME}-backports
 Components: main restricted universe multiverse
 Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
 
 Types: deb
 URIs: http://de.archive.ubuntu.com/ubuntu/
-Suites: noble-security
+Suites: ${CODENAME}-security
 Components: main restricted universe multiverse
 Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
 EOF
